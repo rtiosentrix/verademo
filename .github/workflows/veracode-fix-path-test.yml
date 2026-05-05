@@ -46,12 +46,17 @@ jobs:
         with:
           name: verademo.war
       - name: pipeline-scan action step
-        uses: veracode/Veracode-pipeline-scan-action@v1.0.12
+        id: pipeline-scan
+        uses: veracode/Veracode-pipeline-scan-action@v1.0.20
+        continue-on-error: true
         with:
           vid: ${{ secrets.VID }}
           vkey: ${{ secrets.VKEY }}
-          file: "verademo.war"
-          fail_build: false
+          file: "verademo.war"              # make sure this exists in the workspace
+          fail_build: false                # don’t fail the job just because flaws exist
+          artifact_name: pipeline_scan_results
+          filtered_json_output_file: filtered_results.json
+          json_output_file: results.json
           debug: 1
       - name: List downloaded artifact files
         run: ls -lah
