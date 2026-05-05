@@ -1,0 +1,144 @@
+name: Veracode Fix Path Integrity Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "path-confusion = rename target file; traversal = ../ in path"
+        required: true
+        default: "path-confusion"
+        type: choice
+        options:
+          - path-confusion
+          - traversal
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "8"
+      - name: Build with Maven
+        run: mvn clean package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verademo.war
+          path: target/verademo.war
+
+  pipeline_scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+      - name: get archive
+        uses: actions/download-artifact@v4
+        with:
+          name: verademo.war
+      - name: pipeline-scan action step
+        uses: veracode/Veracode-pipeline-scan-action@v1.0.12
+        with:
+          vid: ${{ secrets.VID }}
+          vkey: ${{ secrets.VKEY }}
+          file: "verademo.war"
+          fail_build: false
+          debug: 1
+
+  veracode_fix:
+    needs: pipeline_scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+
+      - name: get flaw file
+        uses: actions/download-artifact@v4
+        with:
+          name: Veracode Pipeline-Scan Results
+
+      # Create a decoy file that matches the original file contents
+      # (so a mis-targeted patch is likely to apply cleanly)
+      - name: Create decoy file in repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="app/src/main/java/com/veracode/verademo/commands/IgnoreCommand.java"
+          DST="app/src/main/java/com/veracode/verademo/commands/Nope.java"
+          if [ -f "$SRC" ]; then
+            cp "$SRC" "$DST"
+            echo "Created $DST"
+          else
+            echo "WARNING: $SRC not found; adjust SRC/DST paths for your repo layout."
+            exit 1
+          fi
+
+      - name: Tamper scan results paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          IN="filtered_results.json"
+          OUT="tampered_results.json"
+          MODE="${{ inputs.mode }}"
+
+          python3 - <<'PY'
+          import json, os, sys
+
+          mode = os.environ.get("MODE", "path-confusion")
+          in_file = os.environ.get("IN", "filtered_results.json")
+          out_file = os.environ.get("OUT", "tampered_results.json")
+
+          with open(in_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+          # Replace any string value that ends with IgnoreCommand.java
+          target_suffix = "IgnoreCommand.java"
+          replaced = 0
+
+          def walk(x):
+            global replaced
+            if isinstance(x, dict):
+              return {k: walk(v) for k, v in x.items()}
+            if isinstance(x, list):
+              return [walk(v) for v in x]
+            if isinstance(x, str):
+              if x.endswith(target_suffix):
+                replaced += 1
+                if mode == "path-confusion":
+                  return x.replace(target_suffix, "Nope.java")
+                if mode == "traversal":
+                  return "../Nope.java"
+              return x
+            return x
+
+          new_data = walk(data)
+
+          with open(out_file, "w", encoding="utf-8") as f:
+            json.dump(new_data, f)
+
+          print(f"mode={mode} replaced={replaced}")
+          if replaced == 0:
+            print("WARNING: did not find any paths ending with IgnoreCommand.java; adjust target_suffix.")
+          PY
+        env:
+          MODE: ${{ inputs.mode }}
+          IN: filtered_results.json
+          OUT: tampered_results.json
+
+      - name: Run Veracode Fix (create PR)
+        uses: Veracode/veracode-fix@main
+        with:
+          inputFile: tampered_results.json
+          vid: ${{ secrets.VID }}
+          vkey: ${{ secrets.VKEY }}
+          fixType: batch
+          createPR: true
+          prComment: false
+          debug: true
