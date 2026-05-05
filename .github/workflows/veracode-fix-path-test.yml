@@ -27,11 +27,13 @@ jobs:
           distribution: "zulu"
           java-version: "8"
       - name: Build with Maven
-        run: mvn clean package
+        run: mvn -f app/pom.xml clean package
       - uses: actions/upload-artifact@v4
         with:
           name: verademo.war
-          path: target/verademo.war
+          path: app/target/*.war
+      - name: List build outputs
+        run: ls -lah app/target || true
 
   pipeline_scan:
     needs: build
@@ -51,6 +53,8 @@ jobs:
           file: "verademo.war"
           fail_build: false
           debug: 1
+      - name: List downloaded artifact files
+        run: ls -lah
 
   veracode_fix:
     needs: pipeline_scan
