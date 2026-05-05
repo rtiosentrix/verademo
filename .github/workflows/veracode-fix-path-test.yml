@@ -120,8 +120,8 @@ jobs:
               if re.search(r'\.(java|jsp)\b', x, re.I):
                 hits.add(x)
           walk(d)
-          print("COUNT:", len(s))
-          for p in sorted(s)[:200]:
+          print("COUNT:", len(hits))
+          for p in sorted(hits)[:200]:
             print(p)
           PY
       - name: Tamper scan results paths
