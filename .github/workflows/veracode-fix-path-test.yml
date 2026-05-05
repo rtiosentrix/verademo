@@ -175,11 +175,48 @@ jobs:
           MODE: ${{ inputs.mode }}
           IN: filtered_results.json
           OUT: tampered_results.json
+      - name: Sanitize results for Veracode Fix action
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+
+          inp = "tampered_results.json"
+          out = "tampered_results.sanitized.json"
+
+          data = json.load(open(inp, "r", encoding="utf-8"))
+          findings = data.get("findings", [])
+          fixed = 0
+
+          for f in findings:
+            sd = f.get("stack_dumps")
+            if not isinstance(sd, dict):
+              f["stack_dumps"] = {"stack_dump": [{"Frame": []}]}
+              fixed += 1
+              continue
+
+            dumps = sd.get("stack_dump")
+            if not isinstance(dumps, list) or len(dumps) == 0:
+              sd["stack_dump"] = [{"Frame": []}]
+              fixed += 1
+              continue
+
+            for d in dumps:
+              if isinstance(d, dict):
+                if "Frame" not in d or not isinstance(d["Frame"], list):
+                  d["Frame"] = []
+                  fixed += 1
+              # if it's not a dict, ignore; most inputs are dicts
+
+          json.dump(data, open(out, "w", encoding="utf-8"))
+          print(f"Wrote {out}. findings={len(findings)} normalized={fixed}")
+          PY
 
       - name: Run Veracode Fix (create PR)
         uses: Veracode/veracode-fix@main
         with:
-          inputFile: tampered_results.json
+          inputFile: tampered_results.sanitized.json
           vid: ${{ secrets.VID }}
           vkey: ${{ secrets.VKEY }}
           fixType: batch
