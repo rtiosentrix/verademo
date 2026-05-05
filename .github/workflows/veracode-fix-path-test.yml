@@ -57,7 +57,7 @@ jobs:
           vkey: ${{ secrets.VKEY }}
           file: "verademo.war"              # make sure this exists in the workspace
           fail_build: false                # don’t fail the job just because flaws exist
-          asd: true
+          esd: true
           filtered_json_output_file: filtered_results.json
           json_output_file: results.json
           debug: 1
