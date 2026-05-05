@@ -102,6 +102,28 @@ jobs:
             exit 1
           fi
 
+      - name: Inspect filtered_results.json for file paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Looking for .java/.jsp paths in filtered_results.json..."
+          python3 - <<'PY'
+          import json
+          d=json.load(open("filtered_results.json","r",encoding="utf-8"))
+          s=set()
+          def walk(x):
+            if isinstance(x, dict):
+              for v in x.values(): walk(v)
+            elif isinstance(x, list):
+              for v in x: walk(v)
+            elif isinstance(x, str):
+              if x.endswith((".java",".jsp",".js",".ts",".py",".rb")):
+                s.add(x)
+          walk(d)
+          print("COUNT:", len(s))
+          for p in sorted(s)[:200]:
+            print(p)
+          PY
       - name: Tamper scan results paths
         shell: bash
         run: |
