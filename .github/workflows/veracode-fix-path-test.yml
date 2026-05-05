@@ -57,7 +57,7 @@ jobs:
           vkey: ${{ secrets.VKEY }}
           file: "verademo.war"              # make sure this exists in the workspace
           fail_build: false                # don’t fail the job just because flaws exist
-          artifact_name: pipeline_scan_results
+          asd: true
           filtered_json_output_file: filtered_results.json
           json_output_file: results.json
           debug: 1
@@ -108,17 +108,17 @@ jobs:
           set -euo pipefail
           echo "Looking for .java/.jsp paths in filtered_results.json..."
           python3 - <<'PY'
-          import json
+          import json, re
           d=json.load(open("filtered_results.json","r",encoding="utf-8"))
-          s=set()
+          hits=set()
           def walk(x):
             if isinstance(x, dict):
               for v in x.values(): walk(v)
             elif isinstance(x, list):
               for v in x: walk(v)
             elif isinstance(x, str):
-              if x.endswith((".java",".jsp",".js",".ts",".py",".rb")):
-                s.add(x)
+              if re.search(r'\.(java|jsp)\b', x, re.I):
+                hits.add(x)
           walk(d)
           print("COUNT:", len(s))
           for p in sorted(s)[:200]:
@@ -128,7 +128,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IN="filtered_results.json"
+          IN="results.json"
           OUT="tampered_results.json"
           MODE="${{ inputs.mode }}"
 
