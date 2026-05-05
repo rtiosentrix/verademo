@@ -60,7 +60,13 @@ jobs:
           debug: 1
       - name: List downloaded artifact files
         run: ls -lah
-
+      - name: Upload pipeline scan JSON (workaround)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline_scan_results
+          path: |
+            filtered_results.json
+            results.json
   veracode_fix:
     needs: pipeline_scan
     runs-on: ubuntu-latest
@@ -71,7 +77,7 @@ jobs:
       - name: get flaw file
         uses: actions/download-artifact@v4
         with:
-          name: Veracode Pipeline-Scan Results
+          name: Veracode pipeline_scan_results
 
       # Create a decoy file that matches the original file contents
       # (so a mis-targeted patch is likely to apply cleanly)
